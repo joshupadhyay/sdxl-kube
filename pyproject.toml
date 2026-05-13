@@ -1,0 +1,7 @@
+[project]
+name = "sdxl-kube"
+version = "0.1.0"
+description = "FastAPI SDXL inference backend and Kubernetes/EKS infrastructure lab."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
