@@ -1,0 +1,28 @@
+[project]
+name = "sdxl-kube"
+version = "0.1.0"
+description = "FastAPI SDXL inference backend and Kubernetes/EKS infrastructure lab."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[tool.uv]
+package = false
+exclude-newer = "2026-05-06T00:00:00Z"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py", "*_test.py"]
