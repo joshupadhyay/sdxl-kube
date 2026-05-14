@@ -1,24 +1,87 @@
-name: CDK Build
+name: Pulumi Preview
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Run Pulumi preview or deploy."
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - preview
+          - deploy
+      node_desired_size:
+        description: "Desired size for the CPU node group."
+        required: true
+        default: "1"
+        type: choice
+        options:
+          - "0"
+          - "1"
+      confirm:
+        description: "Type deploy to allow pulumi up when action=deploy."
+        required: false
+        default: ""
+        type: string
+  # pushes to main are PR-gated
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  cdk-build:
+  pulumi-preview:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      PULUMI_BACKEND_URL: ${{ vars.PULUMI_BACKEND_URL }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      NODE_DESIRED_SIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.node_desired_size || '1' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install CDK dependencies
-        working-directory: cdk
+      - name: Install Pulumi CLI
+        run: |
+          curl -fsSL https://get.pulumi.com | sh
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+
+      - name: Install Pulumi dependencies
+        working-directory: pulumi
         run: bun install --frozen-lockfile
 
-      - name: Compile CDK
-        working-directory: cdk
-        run: bun run build
+      - name: Type check Pulumi program
+        working-directory: pulumi
+        run: bun run check
+
+      - name: Pulumi preview
+        working-directory: pulumi
+        run: |
+          pulumi login "$PULUMI_BACKEND_URL"
+          pulumi stack select dev --create --secrets-provider passphrase --non-interactive
+          pulumi config set nodeDesiredSize "$NODE_DESIRED_SIZE" --non-interactive
+          pulumi preview --non-interactive
+
+      - name: Pulumi deploy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
+        working-directory: pulumi
+        run: pulumi up --yes --non-interactive
+
+      - name: Refuse unconfirmed deploy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm != 'deploy' }}
+        run: |
+          echo "Refusing to run pulumi up because confirm was not set to 'deploy'."
+          exit 1

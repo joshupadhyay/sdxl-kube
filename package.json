@@ -7,7 +7,9 @@
     "cdk:synth": "cd cdk && node node_modules/aws-cdk/bin/cdk synth",
     "cdk:diff": "cd cdk && node node_modules/aws-cdk/bin/cdk diff",
     "cdk:deploy": "cd cdk && node node_modules/aws-cdk/bin/cdk deploy",
-    "cdk:destroy": "cd cdk && node node_modules/aws-cdk/bin/cdk destroy"
+    "cdk:destroy": "cd cdk && node node_modules/aws-cdk/bin/cdk destroy",
+    "pulumi:check": "cd pulumi && bun run check",
+    "pulumi:preview": "cd pulumi && pulumi preview"
   },
   "devDependencies": {
     "@types/bun": "latest"

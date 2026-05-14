@@ -1,0 +1,7 @@
+name: sdxl-kube
+description: Minimal internal EKS foundation for the SDXL Kubernetes lab.
+runtime:
+  name: nodejs
+  options:
+    packagemanager: bun
+main: index.ts

@@ -12,30 +12,29 @@ client -> Ingress/ALB -> Service -> FastAPI Pod -> GPU node -> S3 image
 
 ## Current Status
 
-- `backend/` contains the standalone FastAPI + diffusers inference server.
-- `cdk/` creates the AWS foundation: EKS cluster, CPU node group, GPU node
-  group, ECR repo, S3 bucket, and service account.
-- `k8s/` contains the Kubernetes app objects: namespace, deployment, service,
-  secret, and an experimental ingress.
-- The first milestone is **GPU pod bring-up**. Ingress/ALB is intentionally a
-  second milestone because the AWS Load Balancer Controller is not installed by
-  the CDK stack yet.
+- `container/` contains the mock FastAPI generation API and Dockerfile.
+- `deployment.yml` contains the local Minikube Deployment and ClusterIP Service,
+  including readiness and liveness probes.
+- `pulumi/` contains the minimal internal-only AWS/EKS foundation: VPC, EKS,
+  CPU node group, ECR, and S3.
+- `cdk/` is kept for reference while the repo transitions to Pulumi.
+- The first AWS milestone is **EKS foundation bring-up**. Public NLB/ALB
+  exposure and GPU node groups are intentionally later milestones.
 
 ## Top-Down Mental Model
 
-1. **CDK creates AWS resources**
+1. **Pulumi creates AWS resources**
    - EKS cluster
-   - CPU node group for system workloads
-   - GPU node group for SDXL inference
+   - CPU node group for the mock API and system workloads
    - ECR repo for the backend image
    - S3 bucket for generated PNGs
-   - IAM-backed Kubernetes service account
 
 2. **Kubernetes schedules the backend**
    - `Deployment` asks for one replica of the FastAPI container.
-   - `nodeSelector` and `tolerations` place it on a GPU node.
-   - `resources.requests["nvidia.com/gpu"] = 1` asks Kubernetes for a GPU.
-   - Readiness/liveness probes call `/health`.
+   - Readiness probe calls `/ready`.
+   - Liveness probe calls `/health`.
+   - Future GPU scheduling will add GPU node groups, node selectors,
+     tolerations, and `nvidia.com/gpu` resource requests.
 
 3. **Networking routes traffic**
    - `Service` gives pods a stable internal endpoint.
@@ -45,43 +44,27 @@ client -> Ingress/ALB -> Service -> FastAPI Pod -> GPU node -> S3 image
 ## Useful Commands
 
 ```bash
-# AWS infra
-bun run cdk:build
-bun run cdk:synth
-bun run cdk:deploy
+# AWS infra preview
+export PULUMI_BACKEND_URL="s3://REPLACE_WITH_PULUMI_STATE_BUCKET"
+export PULUMI_CONFIG_PASSPHRASE="replace-me"
+pulumi login "$PULUMI_BACKEND_URL"
+cd pulumi
+bun install
+pulumi stack select dev --create --secrets-provider passphrase
+pulumi preview
 
 # Cluster orientation
 kubectl get nodes -o wide
 kubectl get ns
-kubectl get deploy,rs,pods,svc,ingress -n sdxl-kube
-kubectl describe pod -n sdxl-kube <pod-name>
-kubectl logs -n sdxl-kube <pod-name>
-kubectl get events -n sdxl-kube --sort-by=.lastTimestamp
+kubectl get deploy,rs,pods,svc
+kubectl describe pod -l app=sdxl-kube
+kubectl logs deployment/sdxl-kube
+kubectl get events --sort-by=.lastTimestamp
 ```
 
-The CDK CLI scripts require Node 20+ on `PATH`.
-
-## Manifest Rendering
-
-The deployment manifest contains shell placeholders for the image and bucket:
-
-- `${ECR_BACKEND_URI}`
-- `${IMAGE_TAG}`
-- `${S3_BUCKET}`
-
-Render before applying:
-
-```bash
-export ECR_BACKEND_URI="..."
-export IMAGE_TAG="..."
-export S3_BUCKET="..."
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/secrets.yaml
-envsubst < k8s/backend-deployment.yaml | kubectl apply -f -
-kubectl apply -f k8s/backend-service.yaml
-```
-
-Apply the namespace and secret before the deployment.
+ECR stores built images, not Dockerfiles. The future AWS image path is:
+build from `container/Dockerfile`, push the image to ECR, then update the
+Kubernetes Deployment image to the ECR image URI.
 
 ## What To Learn Here
 
