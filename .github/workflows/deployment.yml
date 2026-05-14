@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+      PULUMI_BACKEND_URL: ${{ vars.PULUMI_BACKEND_URL }}
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       NODE_DESIRED_SIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.node_desired_size || '1' }}
     steps:
@@ -48,7 +48,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE }}
 
       - uses: oven-sh/setup-bun@v2
         with:
