@@ -1,34 +1,38 @@
 ## extremely simple deployment
 
 apiVersion: apps/v1
-kind: Deployment
+kind: Deployment # defines that this is a deployment
 metadata:
-  name: hello-world
-spec:
-  replicas: 1
+  name: sdxl-kube # "Create a Deployment named sdxl-kube"
+spec: # defining owned Pods / Configuration of Pods
+  replicas: 1 
   selector:
     matchLabels:
-      app: hello-world
-  template:
-    metadata:
+      app: sdxl-kube # assigns Pods labelled "sdxl-kube" to this deployment 
+  template: # Pod configuration
+    metadata: 
       labels:
-        app: hello-world
+        app: sdxl-kube # every pod created will have hte label sdxl-kube
+
+        # selector is how deployment finds labelled Pods, template is how deployment labels created Pods
     spec:
       containers:
-        - name: hello-world
+        - name: sdxl-kube
+          # python fastAPI image right now, will adjust when CUDA is involved
           image: hello-world-test
+          # we're using a local image right now, adjust later
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
 ---
 apiVersion: v1
-kind: Service
+kind: Service # defines the service for the Pods (stable entrypoint)
 metadata:
-  name: hello-world
+  name: sdxl-kube-python-api # service DNS 
 spec:
   type: ClusterIP
   selector:
-    app: hello-world
+    app: sdxl-kube # route traffic to Pods labelled sdxl-kube
   ports:
-    - port: 80
-      targetPort: 8080
+    - port: 80 # external port 
+      targetPort: 8080 # container port
