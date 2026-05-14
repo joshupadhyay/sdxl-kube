@@ -349,6 +349,36 @@
         background: #ffffff;
       }
 
+      .learning-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .learning-card {
+        min-height: 260px;
+        border-top: 4px solid var(--accent);
+      }
+
+      .learning-card:nth-child(2) {
+        border-top-color: var(--accent-2);
+      }
+
+      .learning-card:nth-child(3) {
+        border-top-color: var(--accent-3);
+      }
+
+      .learning-card ul {
+        display: grid;
+        gap: 10px;
+        margin: 12px 0 0;
+        padding-left: 19px;
+      }
+
+      .learning-card li::marker {
+        color: var(--accent);
+      }
+
       @media (max-width: 920px) {
         .shell {
           grid-template-columns: 1fr;
@@ -373,7 +403,8 @@
         .simulator,
         .two-grid,
         .three-grid,
-        .summary-grid {
+        .summary-grid,
+        .learning-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -409,6 +440,7 @@
           <a href="#yaml">YAML</a>
           <a href="#debugging">Debugging</a>
           <a href="#model-server">Model Server</a>
+          <a href="#learning-trace">Learning Trace</a>
         </nav>
       </aside>
 
@@ -582,10 +614,22 @@ async def ready_check():
           <h2>Debugging Commands</h2>
           <ul class="checklist">
             <li><code>kubectl get pods</code> shows whether the pod is Ready.</li>
-            <li><code>kubectl describe pod &lt;pod&gt;</code> shows probe failures and restart events.</li>
+            <li><code>kubectl describe pod -l app=sdxl-kube</code> shows probe config in the <code>Containers:</code> section.</li>
             <li><code>kubectl get endpoints hello-world</code> shows which pod IPs the Service can route to.</li>
             <li><code>kubectl logs deployment/hello-world</code> shows FastAPI probe requests and app errors.</li>
           </ul>
+          <pre><code>Containers:
+  sdxl-kube:
+    Ready:          True
+    Restart Count:  0
+    Liveness:       http-get http://:8080/health delay=10s timeout=1s period=10s #success=1 #failure=3
+    Readiness:      http-get http://:8080/ready delay=3s timeout=1s period=5s #success=1 #failure=3</code></pre>
+          <p class="muted">
+            Successful probes usually do not appear in <code>Events:</code>. Events get noisy when
+            probes fail, but for passing probes the clearest proof is the <code>Liveness:</code> and
+            <code>Readiness:</code> config in <code>describe</code>, plus the repeated
+            <code>GET /health</code> and <code>GET /ready</code> lines in app logs.
+          </p>
         </section>
 
         <section class="two-grid" id="model-server">
@@ -606,6 +650,54 @@ async def ready_check():
                 inference has completed. That keeps traffic away from cold pods.
               </p>
             </div>
+          </div>
+        </section>
+
+        <section id="learning-trace">
+          <p class="eyebrow">What You Learned By Building</p>
+          <h2>Learning Trace From This Session</h2>
+          <p class="muted">
+            This is the trail of concepts you picked up while moving from a tiny container to a
+            probe-aware mock generation API. These are worth keeping because they map directly to the
+            future EKS and GPU version.
+          </p>
+          <div class="learning-grid">
+            <article class="panel learning-card">
+              <div class="panel-inner">
+                <h3>Concepts That Clicked</h3>
+                <ul>
+                  <li>A Deployment keeps pods alive; a Service gives matching pods a stable route.</li>
+                  <li>Labels are tags, not names. Selectors find pods by those tags.</li>
+                  <li>A LoadBalancer or ALB exposes a Service to a wider network; the Service still routes to pods.</li>
+                  <li>Minikube is the local single-node cluster; kubelet is the node agent inside it.</li>
+                  <li>Each pod has its own IP and can listen on the same container port without conflict.</li>
+                </ul>
+              </div>
+            </article>
+            <article class="panel learning-card">
+              <div class="panel-inner">
+                <h3>Places You Got Stuck</h3>
+                <ul>
+                  <li><code>kubectl proxy</code> exposes the Kubernetes API, not a friendly app index.</li>
+                  <li><code>localhost:8080</code> belongs to one port-forward process, even if many services exist.</li>
+                  <li>Renaming a Deployment in YAML creates a new Kubernetes object after apply; it does not rename the old one.</li>
+                  <li>Changing Python code does nothing to the running pod until the image is rebuilt and the Deployment is rolled out.</li>
+                  <li>Killing a port-forward only removes the local tunnel; the pod, Service, and Deployment keep running.</li>
+                </ul>
+              </div>
+            </article>
+            <article class="panel learning-card">
+              <div class="panel-inner">
+                <h3>Useful Corrections</h3>
+                <ul>
+                  <li><code>rollout</code>, not rollover: <code>kubectl rollout restart deployment/sdxl-kube</code>.</li>
+                  <li>Probe config belongs under the container because kubelet calls endpoints on that container.</li>
+                  <li><code>/health</code> can stay as liveness; <code>/ready</code> is for traffic eligibility.</li>
+                  <li>Use <code>HTTPException</code> from FastAPI to intentionally return non-200 API responses.</li>
+                  <li>For readiness logic, call the function: <code>model_loaded()</code>, not <code>model_loaded</code>.</li>
+                </ul>
+              </div>
+            </article>
           </div>
         </section>
       </main>

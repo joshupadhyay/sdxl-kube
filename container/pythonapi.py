@@ -4,9 +4,9 @@ from pydantic import BaseModel
 from uuid import uuid4
 import time
 
-app = FastAPI(title="sdxl-kube fake API")
+app = FastAPI(title="sdxl-kube mock API")
 
-def model_loaded(flip = True):
+def model_loaded(flip=True):
     return flip
 
 class GenerateRequest(BaseModel):
@@ -26,7 +26,7 @@ async def health_check():
 ## health check for model readiness, warmup on kube pod
 @app.get("/ready")
 async def readiness_check():
-    if not model_loaded:
+    if not model_loaded():
         raise HTTPException(status_code=503, detail="model not loaded")
     return {"status": "ready"}
 

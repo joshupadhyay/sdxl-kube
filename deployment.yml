@@ -24,6 +24,21 @@ spec: # defining owned Pods / Configuration of Pods
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
+          
+          # the probes go underneath the Container, since it's using our Pod endpoints
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # use the /health endpoint, check every 10s
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service # defines the service for the Pods (stable entrypoint)
