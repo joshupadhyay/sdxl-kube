@@ -5,7 +5,9 @@ import * as pulumi from "@pulumi/pulumi";
 
 const project = pulumi.getProject();
 const stack = pulumi.getStack();
+const config = new pulumi.Config();
 const clusterName = "sdxl-kube-eks";
+const nodeDesiredSize = config.getNumber("nodeDesiredSize") ?? 1;
 const commonTags = {
   Project: project,
   Stack: stack,
@@ -128,8 +130,8 @@ new eks.ManagedNodeGroup(
       workload: "general",
     },
     scalingConfig: {
-      minSize: 1,
-      desiredSize: 1,
+      minSize: 0,
+      desiredSize: nodeDesiredSize,
       maxSize: 1,
     },
   },

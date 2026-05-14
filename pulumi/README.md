@@ -20,6 +20,7 @@ pulumi login "$PULUMI_BACKEND_URL"
 cd pulumi
 bun install
 pulumi stack select dev --create --secrets-provider passphrase
+pulumi config set nodeDesiredSize 1
 pulumi preview
 ```
 
@@ -34,6 +35,18 @@ pulumi preview
 
 This first pass is internal-only: it does not create an ALB, NLB, Ingress, or
 public app endpoint.
+
+## Scaling Down
+
+The CPU node group supports a desired size of `0` or `1`.
+
+```bash
+pulumi config set nodeDesiredSize 0
+pulumi up
+```
+
+GitHub Actions runs preview on PRs and pushes to `main`. It only runs
+`pulumi up` from the manual workflow when `action=deploy` and `confirm=deploy`.
 
 ## Image Flow
 
