@@ -7,13 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Run Pulumi preview or deploy."
+        description: "Run Pulumi preview, deploy, or destroy."
         required: true
         default: "preview"
         type: choice
         options:
           - preview
           - deploy
+          - destroy
       node_desired_size:
         description: "Desired size for the CPU node group."
         required: true
@@ -23,7 +24,7 @@ on:
           - "0"
           - "1"
       confirm:
-        description: "Type deploy to allow pulumi up when action=deploy."
+        description: "Type deploy or destroy to confirm destructive actions."
         required: false
         default: ""
         type: string
@@ -82,6 +83,34 @@ jobs:
         working-directory: pulumi
         run: pulumi up --yes --non-interactive
 
+      - name: Delete Kubernetes app before destroy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && inputs.confirm == 'destroy' }}
+        working-directory: pulumi
+        run: |
+          EKS_CLUSTER_NAME="$(pulumi stack output eksClusterName)"
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          ALB_HOSTNAME="$(kubectl get ingress sdxl-kube-api \
+            -n sdxl-kube \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+          ALB_NAME="${ALB_HOSTNAME%%.*}"
+          kubectl delete -f ../k8s/aws/sdxl-kube.yaml --ignore-not-found=true
+          if [ -z "$ALB_NAME" ]; then
+            exit 0
+          fi
+          for attempt in $(seq 1 90); do
+            if ! aws elbv2 describe-load-balancers --names "$ALB_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for ALB deletion: ${ALB_NAME}"
+          exit 1
+
+      - name: Pulumi destroy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && inputs.confirm == 'destroy' }}
+        working-directory: pulumi
+        run: pulumi destroy --yes --non-interactive
+
       - name: Read deployment outputs
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
         working-directory: pulumi
@@ -135,4 +164,10 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm != 'deploy' }}
         run: |
           echo "Refusing to run pulumi up because confirm was not set to 'deploy'."
+          exit 1
+
+      - name: Refuse unconfirmed destroy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && inputs.confirm != 'destroy' }}
+        run: |
+          echo "Refusing to run pulumi destroy because confirm was not set to 'destroy'."
           exit 1
