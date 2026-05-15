@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sdxl-kube
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdxl-kube
+  namespace: sdxl-kube
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdxl-kube
+  template:
+    metadata:
+      labels:
+        app: sdxl-kube
+    spec:
+      containers:
+        - name: sdxl-kube
+          image: IMAGE_URI_PLACEHOLDER
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdxl-kube-api
+  namespace: sdxl-kube
+spec:
+  type: ClusterIP
+  selector:
+    app: sdxl-kube
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+--- # compared to minikube and local, we explicitly defined an alb here..
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sdxl-kube-api
+  namespace: sdxl-kube
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sdxl-kube-api
+                port:
+                  number: 80
