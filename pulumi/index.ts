@@ -72,7 +72,7 @@ new aws.s3.BucketPublicAccessBlock("sdxl-kube-gallery-public-access-block", {
   restrictPublicBuckets: true,
 });
 
-new aws.s3.BucketServerSideEncryptionConfigurationV2("sdxl-kube-gallery-encryption", {
+new aws.s3.BucketServerSideEncryptionConfiguration("sdxl-kube-gallery-encryption", {
   bucket: galleryBucket.id,
   rules: [
     {
