@@ -16,10 +16,11 @@ client -> Ingress/ALB -> Service -> FastAPI Pod -> GPU node -> S3 image
 - `deployment.yml` contains the local Minikube Deployment and ClusterIP Service,
   including readiness and liveness probes.
 - `pulumi/` contains the minimal internal-only AWS/EKS foundation: VPC, EKS,
-  CPU node group, ECR, and S3.
+  CPU node group, ECR, S3, and the AWS Load Balancer Controller.
 - `cdk/` is kept for reference while the repo transitions to Pulumi.
 - The first AWS milestone is **EKS foundation bring-up**. Public NLB/ALB
-  exposure and GPU node groups are intentionally later milestones.
+  exposure for the mock API is handled by an ALB Ingress. GPU node groups are
+  intentionally a later milestone.
 
 ## Top-Down Mental Model
 
@@ -38,8 +39,14 @@ client -> Ingress/ALB -> Service -> FastAPI Pod -> GPU node -> S3 image
 
 3. **Networking routes traffic**
    - `Service` gives pods a stable internal endpoint.
-   - `Ingress` is the future public HTTP front door.
-   - On EKS, an Ingress only works after an ingress controller exists.
+   - `Ingress` is the public HTTP front door.
+   - The AWS Load Balancer Controller reconciles the Ingress into an ALB.
+
+4. **GitHub Actions deploys the app**
+   - Pulumi creates the ECR repository and cluster.
+   - The manual deploy workflow builds `container/Dockerfile`.
+   - The workflow pushes the image to ECR using the current Git SHA as the tag.
+   - The workflow applies `k8s/aws/sdxl-kube.yaml` and prints the ALB hostname.
 
 ## Useful Commands
 
@@ -52,6 +59,12 @@ cd pulumi
 bun install
 pulumi stack select dev --create --secrets-provider passphrase
 pulumi preview
+
+# Manual hosted endpoint deploy
+# Run the GitHub Actions workflow_dispatch with:
+# action=deploy
+# node_desired_size=1
+# confirm=deploy
 
 # Cluster orientation
 kubectl get nodes -o wide

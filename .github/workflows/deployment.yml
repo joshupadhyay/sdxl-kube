@@ -1,4 +1,4 @@
-name: Pulumi Preview
+name: EKS Deploy
 
 on:
   push:
@@ -34,7 +34,7 @@ permissions:
   id-token: write
 
 jobs:
-  pulumi-preview:
+  eks-deploy:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -53,6 +53,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - uses: azure/setup-kubectl@v4
 
       - name: Install Pulumi CLI
         run: |
@@ -79,6 +81,57 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
         working-directory: pulumi
         run: pulumi up --yes --non-interactive
+
+      - name: Read deployment outputs
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
+        working-directory: pulumi
+        run: |
+          ECR_REPOSITORY_URL="$(pulumi stack output ecrRepositoryUrl)"
+          EKS_CLUSTER_NAME="$(pulumi stack output eksClusterName)"
+          IMAGE_URI="${ECR_REPOSITORY_URL}:${GITHUB_SHA}"
+          echo "ECR_REPOSITORY_URL=${ECR_REPOSITORY_URL}" >> "$GITHUB_ENV"
+          echo "EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME}" >> "$GITHUB_ENV"
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+
+      - name: Build and push API image
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
+        run: |
+          ECR_REGISTRY="${ECR_REPOSITORY_URL%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          docker build -t "$IMAGE_URI" ./container
+          docker push "$IMAGE_URI"
+
+      - name: Deploy API to EKS
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          kubectl rollout status deployment/aws-load-balancer-controller \
+            -n kube-system \
+            --timeout=5m
+          sed "s|IMAGE_URI_PLACEHOLDER|${IMAGE_URI}|g" k8s/aws/sdxl-kube.yaml \
+            | kubectl apply -f -
+          kubectl rollout status deployment/sdxl-kube \
+            -n sdxl-kube \
+            --timeout=5m
+
+      - name: Print ALB endpoint
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
+        run: |
+          for attempt in $(seq 1 60); do
+            ALB_HOSTNAME="$(kubectl get ingress sdxl-kube-api \
+              -n sdxl-kube \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            if [ -n "$ALB_HOSTNAME" ]; then
+              echo "ALB endpoint: http://${ALB_HOSTNAME}"
+              echo "Health check: http://${ALB_HOSTNAME}/health"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for the ALB hostname."
+          kubectl describe ingress sdxl-kube-api -n sdxl-kube || true
+          exit 1
 
       - name: Refuse unconfirmed deploy
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm != 'deploy' }}
