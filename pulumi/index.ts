@@ -253,6 +253,7 @@ new k8s.helm.v3.Release(
     },
     values: {
       clusterName,
+      fullnameOverride: "aws-load-balancer-controller",
       region: currentRegion.name,
       vpcId: vpc.vpcId,
       serviceAccount: {

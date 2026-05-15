@@ -106,22 +106,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.confirm == 'deploy' }}
         run: |
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
-          for attempt in $(seq 1 60); do
-            LBC_DEPLOYMENT="$(kubectl get deployment \
-              -n kube-system \
-              -l app.kubernetes.io/name=aws-load-balancer-controller \
-              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-            if [ -n "$LBC_DEPLOYMENT" ]; then
-              break
-            fi
-            sleep 5
-          done
-          if [ -z "$LBC_DEPLOYMENT" ]; then
-            echo "AWS Load Balancer Controller deployment was not found."
-            kubectl get deployment -n kube-system --show-labels
-            exit 1
-          fi
-          kubectl rollout status "deployment/${LBC_DEPLOYMENT}" -n kube-system --timeout=5m
+          kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=5m
           sed "s|IMAGE_URI_PLACEHOLDER|${IMAGE_URI}|g" k8s/aws/sdxl-kube.yaml \
             | kubectl apply -f -
           kubectl rollout status deployment/sdxl-kube \
