@@ -30,6 +30,7 @@ const vpc = new awsx.ec2.Vpc("sdxl-kube-vpc", {
   enableDnsHostnames: true,
   enableDnsSupport: true,
   numberOfAvailabilityZones: 2,
+  subnetStrategy: awsx.ec2.SubnetAllocationStrategy.Legacy,
   natGateways: {
     // Lower-cost learning setup: one NAT gateway for all private subnets.
     // Production usually uses one NAT gateway per AZ.
@@ -119,6 +120,7 @@ const cluster = new eks.Cluster("sdxl-kube-cluster", {
   vpcId: vpc.vpcId,
   publicSubnetIds: vpc.publicSubnetIds,
   privateSubnetIds: vpc.privateSubnetIds,
+  createOidcProvider: true,
   skipDefaultNodeGroup: true,
   endpointPrivateAccess: true,
   endpointPublicAccess: true,
